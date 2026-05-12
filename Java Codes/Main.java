@@ -2,29 +2,22 @@ import javax.swing.SwingUtilities;
 
 public class Main {
     public static void main(String[] args) {
-        
-        // 1. UI'yi Thread-Safe bir şekilde başlatıyoruz
         SwingUtilities.invokeLater(() -> {
             
-            // Arayüzcü arkadaşının yazdığı UI sınıfını ayağa kaldır
-            AudiometerUI ui = new AudiometerUI();
-            ui.setVisible(true);
+            // 1. Haberleşme Modülü Yaratılır (Senin Modülün)
+            AudiometerCommunication comm = new AudiometerCommunication();
 
-            // NOT: UI sınıfının içinde "AudiometerCommunication comm = new AudiometerCommunication();"
-            // tanımlı. UI arkadaşın "Start Test" butonuna bastığında aslında Algoritmacı arkadaşın
-            // test dizisini başlatması lazım. 
+            // 2. Arayüz Modülü Yaratılır (3. Kişinin Modülü)
+            AudiometerUI ui = new AudiometerUI(comm);
+
+            // 3. Algoritma Modülü Yaratılır (Beyin)
+            HughsonWestlakeStateMachine logic = new HughsonWestlakeStateMachine(comm, ui);
+
+            // 4. Parçaları Birbirine Bağla
+            ui.setLogic(logic);
             
-            /* 
-             * AŞAĞIDAKİ YAPI ALGORİTMACI (LOGIC) İÇİN BİR TASLAKTIR:
-             * UI üzerinden "Test Başlat" dendiğinde, Algoritmacı bu tarz bir 
-             * state-machine (durum makinesi) ile senin modülünü (comm.sendStimulus) çağıracak
-             * ve geri dönen onPatientResponded() verisine göre grafiği çizecek.
-             * 
-             * Şimdilik UI arkadaşının test verileri doğrudan AudiometerUI sınıfında 
-             * "startTest()" metodu içinde ui.addThresholdToGraph(...) olarak çiziliyor.
-             */
-             
-            System.out.println("Sistem Hazır. Lütfen arayüzden port seçip Connect'e basınız.");
+            ui.setVisible(true);
+            System.out.println("Sistem Hazır. Port seçip Connect'e basınız.");
         });
     }
 }

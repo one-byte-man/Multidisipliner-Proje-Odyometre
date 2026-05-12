@@ -8,7 +8,7 @@ public class AudiometerCommunication {
     private SerialPort activePort;
     private AudiometerListener eventListener; // Diğer sınıflara haber verecek elçimiz
     private Random randomGenerator;
-
+    private volatile boolean isWaitingForResponse = false;
     // Constructor (Kurucu Metod)
     public AudiometerCommunication() {
         randomGenerator = new Random();
@@ -67,10 +67,9 @@ public class AudiometerCommunication {
                 // Byte dizisini String'e çevir (Örn: "RESPONSE\n" -> "RESPONSE")
                 String receivedMessage = new String(newData).trim();
 
+                // setupListener() içindeki RESPONSE yakalama if bloğunu da şöyle güncelle:
                 if (receivedMessage.equals("RESPONSE")) {
-                    System.out.println("-> Cihazdan sinyal geldi: HASTA DUYDU (RESPONSE)");
-
-                    // Eğer biri (UI veya Algoritma) bizi dinliyorsa, ona haber ver!
+                    isWaitingForResponse = false; // Süreyi (Timeout'u) iptal et!
                     if (eventListener != null) {
                         eventListener.onPatientResponded(); 
                     }
@@ -83,42 +82,40 @@ public class AudiometerCommunication {
      * Adım 4: Cihaza sesi çalması için komut gönderir (Biyomedikal Zamanlama Kuralları ile)
      * Not: Arayüz donmasın diye bunu ayrı bir Thread (İş Parçacığı) içinde yapıyoruz.
      */
-    public void sendStimulus(int frequency, int dbLevel) {
-        if (activePort == null || !activePort.isOpen()) {
-            System.out.println("Hata: Port acik degil, sinyal gonderilemez.");
-            return;
-        }
+ // sendStimulus metodunu şu şekilde güncelle:
+    public void sendStimulus(String ear, int frequency, int dbLevel) {
+        if (activePort == null || !activePort.isOpen()) return;
 
-        // Yeni bir Thread başlatıyoruz ki arayüz kilitlenmesin
         new Thread(() -> {
             try {
-                // 1. Rastgele Bekleme (Anti-Tahmin): 2 ile 4 saniye arası
-                int waitTime = 2000 + randomGenerator.nextInt(2001); // 2000ms - 4000ms
-                System.out.println("Sinyal oncesi bekleniyor... " + waitTime + " ms");
+                int waitTime = 2000 + randomGenerator.nextInt(2001);
                 Thread.sleep(waitTime);
 
-                // 2. Komutu Hazırla (Örn: F1000D40\n) - Arduino'nun beklediği format
-                String command = "F" + frequency + "D" + dbLevel + "\n";
-                byte[] commandBytes = command.getBytes();
+                // Donanıma kulak bilgisi de gönderilebilir (Örn: R_F1000D40\n)
+                String command = ear.substring(0,1) + "_F" + frequency + "D" + dbLevel + "\n";
+                activePort.writeBytes(command.getBytes(), command.getBytes().length);
 
-                // 3. Sinyali Gönder (Fade-in işlemi donanımda yapılacak, biz sadece komut veriyoruz)
-                System.out.println("<- Cihaza Gonderiliyor: " + frequency + "Hz, " + dbLevel + "dB");
-                activePort.writeBytes(commandBytes, commandBytes.length);
-
-                // 4. Sinyal Sunum Süresi: 1.5 Saniye
                 Thread.sleep(1500); 
 
-                // 5. Sinyali Kapat Komutu (Frekans 0, dB 0 diyebiliriz)
                 String stopCommand = "F0D0\n";
-                activePort.writeBytes(stopCommand.getBytes(), stopCommand.length());
-                System.out.println("<- Sinyal durduruldu.");
+                activePort.writeBytes(stopCommand.getBytes(), stopCommand.getBytes().length);
+                
+                // DİKKAT: Timeout Mantığı Başlıyor
+                isWaitingForResponse = true;
+                Thread.sleep(2000); // Hastanın tepki vermesi için 2 saniye bekle
+                
+                if (isWaitingForResponse && eventListener != null) {
+                    // Eğer bu süre içinde 'RESPONSE' gelip boolean false yapılmadıysa, zaman doldu demektir!
+                    eventListener.onNoResponseTimeout();
+                }
 
             } catch (InterruptedException e) {
-                System.out.println("Sinyal gonderimi sirasinda hata olustu.");
                 e.printStackTrace();
             }
         }).start();
     }
+
+
 
     // Portu güvenli bir şekilde kapatmak için
     public void closePort() {

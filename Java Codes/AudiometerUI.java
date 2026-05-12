@@ -1,27 +1,12 @@
-import com.fazecast.jSerialComm.SerialPort;
 
+import com.fazecast.jSerialComm.SerialPort;
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * AudiometerUI
- *
- * Main graphical user interface for the audiometer system.
- *
- * Responsibilities:
- * - List available serial ports
- * - Connect to selected serial port using AudiometerCommunication
- * - Provide test start button
- * - Display patient RESPONSE feedback
- * - Update audiogram graph when threshold results are received from algorithm module
- *
- * Note:
- * This class assumes that AudiometerCommunication and AudiometerListener
- * are provided by the communication module.
- */
 public class AudiometerUI extends JFrame {
 
     private AudiometerCommunication comm;
+    private HughsonWestlakeStateMachine logic; // Algoritma referansı eklendi
 
     private JComboBox<String> portComboBox;
     private JButton refreshPortsButton;
@@ -31,11 +16,11 @@ public class AudiometerUI extends JFrame {
 
     private JLabel connectionStatusLabel;
     private JLabel responseStatusLabel;
-
     private AudiogramPanel audiogramPanel;
 
-    public AudiometerUI() {
-        comm = new AudiometerCommunication();
+    // Constructor artık comm parametresi alıyor
+    public AudiometerUI(AudiometerCommunication comm) {
+        this.comm = comm;
 
         setTitle("Audiometer Test System - UI and Audiogram");
         setSize(1000, 700);
@@ -43,8 +28,12 @@ public class AudiometerUI extends JFrame {
         setLocationRelativeTo(null);
 
         initializeComponents();
-        registerCommunicationListener();
         loadAvailablePorts();
+    }
+
+    // Main'den algoritma referansını buraya veriyoruz
+    public void setLogic(HughsonWestlakeStateMachine logic) {
+        this.logic = logic;
     }
 
     private void initializeComponents() {
@@ -81,82 +70,31 @@ public class AudiometerUI extends JFrame {
         clearGraphButton.addActionListener(e -> audiogramPanel.clearResults());
     }
 
-    private void registerCommunicationListener() {
-        comm.setListener(new AudiometerListener() {
-            @Override
-            public void onPatientResponded() {
-                showPatientResponseFeedback();
-
-                /*
-                 * Important:
-                 * The UI does not calculate the Hughson-Westlake algorithm.
-                 * The algorithm module should receive this RESPONSE event,
-                 * calculate the threshold, and then call:
-                 *
-                 * addThresholdToGraph("RIGHT", frequency, dbHL);
-                 * or
-                 * addThresholdToGraph("LEFT", frequency, dbHL);
-                 */
-            }
-
-            @Override
-            public void onConnectionLost() {
-                SwingUtilities.invokeLater(() -> {
-                    connectionStatusLabel.setText("Status: Connection lost");
-                    startTestButton.setEnabled(false);
-                });
-            }
-        });
-    }
-
     private void loadAvailablePorts() {
         portComboBox.removeAllItems();
-
         SerialPort[] ports = comm.getAvailablePorts();
-
         for (SerialPort port : ports) {
             portComboBox.addItem(port.getSystemPortName());
-        }
-
-        if (ports.length == 0) {
-            connectionStatusLabel.setText("Status: No serial ports found");
-        } else {
-            connectionStatusLabel.setText("Status: Ports loaded");
         }
     }
 
     private void connectToSelectedPort() {
         String selectedPort = (String) portComboBox.getSelectedItem();
-
-        if (selectedPort == null) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "No serial port selected.",
-                    "Connection Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
-            return;
-        }
-
-        boolean success = comm.connectToPort(selectedPort);
-
-        if (success) {
+        if (selectedPort != null && comm.connectToPort(selectedPort)) {
             connectionStatusLabel.setText("Status: Connected to " + selectedPort);
             startTestButton.setEnabled(true);
         } else {
             connectionStatusLabel.setText("Status: Connection failed");
-            startTestButton.setEnabled(false);
         }
     }
 
     private void startTest() {
         connectionStatusLabel.setText("Status: Test started");
+        if (logic != null) {
+            logic.startTest(); // Arayüz sadece algoritmayı tetikler!
+        }
     }
 
-    /**
-     * Called when the patient presses the response button.
-     * Shows temporary visual feedback on the UI.
-     */
     public void showPatientResponseFeedback() {
         SwingUtilities.invokeLater(() -> {
             responseStatusLabel.setText("RESPONSE: Yes");
@@ -166,40 +104,16 @@ public class AudiometerUI extends JFrame {
                 responseStatusLabel.setText("RESPONSE: No");
                 responseStatusLabel.setForeground(Color.BLACK);
             });
-
             timer.setRepeats(false);
             timer.start();
         });
     }
 
-    /**
-     * Public method for the algorithm module.
-     * After the Hughson-Westlake algorithm finds a threshold,
-     * it should call this method to update the audiogram.
-     *
-     * @param ear       "RIGHT" or "LEFT"
-     * @param frequency frequency in Hz
-     * @param dbHL      hearing threshold in dB HL
-     */
     public void addThresholdToGraph(String ear, int frequency, int dbHL) {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                audiogramPanel.addResult(ear, frequency, dbHL);
-            } catch (IllegalArgumentException ex) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        ex.getMessage(),
-                        "Invalid Audiogram Data",
-                        JOptionPane.ERROR_MESSAGE
-                );
-            }
-        });
+        SwingUtilities.invokeLater(() -> audiogramPanel.addResult(ear, frequency, dbHL));
     }
-
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            AudiometerUI ui = new AudiometerUI();
-            ui.setVisible(true);
-        });
+    
+    public void updateStatus(String msg) {
+        SwingUtilities.invokeLater(() -> connectionStatusLabel.setText(msg));
     }
 }

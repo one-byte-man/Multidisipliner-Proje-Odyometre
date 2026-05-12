@@ -1,9 +1,11 @@
 
-// Bu dosya, senin modülün ile diğer modüller arasındaki "sözleşme"dir.
 public interface AudiometerListener {
-    // Cihazdan "RESPONSE" geldiğinde bu metod otomatik tetiklenecek
+    // Cihazdan "RESPONSE" geldiğinde tetiklenir
     void onPatientResponded();
     
-    // İsteğe bağlı: Port koptuğunda UI'cıya haber vermek için
+    // Hasta belirli bir süre butona basmazsa tetiklenir (5 dB artırmak için)
+    void onNoResponseTimeout(); 
+    
+    // Bağlantı koptuğunda tetiklenir
     void onConnectionLost(); 
 }
