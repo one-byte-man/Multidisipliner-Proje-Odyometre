@@ -23,7 +23,7 @@ public class AudiometerCommunication {
         
         // Arduino'daki Serial.begin(115200); hızı ile aynı!
         activePort.setComPortParameters(115200, 8, 1, 0); 
-        activePort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
+        activePort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING | SerialPort.TIMEOUT_WRITE_BLOCKING, 100, 100);
 
         if (activePort.openPort()) {
             System.out.println(portName + " portu başarıyla açıldı.");
