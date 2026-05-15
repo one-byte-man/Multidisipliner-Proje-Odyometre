@@ -63,6 +63,18 @@ public class AudiometerUI extends JFrame {
 
         add(topPanel, BorderLayout.NORTH);
         add(audiogramPanel, BorderLayout.CENTER);
+        
+        JButton simulateResponseButton = new JButton("Hasta Duydu (Space)");
+        simulateResponseButton.addActionListener(e -> comm.simulatePatientResponse());
+        topPanel.add(simulateResponseButton);
+
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("SPACE"), "spacePressed");
+        getRootPane().getActionMap().put("spacePressed", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                comm.simulatePatientResponse();
+            }
+        });
 
         refreshPortsButton.addActionListener(e -> loadAvailablePorts());
         connectButton.addActionListener(e -> connectToSelectedPort());

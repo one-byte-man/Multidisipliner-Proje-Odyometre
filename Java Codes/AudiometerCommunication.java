@@ -80,37 +80,56 @@ public class AudiometerCommunication {
 
         new Thread(() -> {
             try {
-                // 1. Odyometri kuralı: Testler arası tahmin edilemez bekleme (2 - 4 sn)
+                // 1. Rastgele bekleme (2-4 sn)
                 int waitTime = 2000 + randomGenerator.nextInt(2001);
                 System.out.println("Ses gönderilmeden önce bekleniyor... " + waitTime + " ms");
                 Thread.sleep(waitTime);
 
-                // 2. Arduino'nun beklediği format: TONE:frekans,desibel\n
+                // KORUMA: Sesi göndermeden HEMEN ÖNCE yanıt dinlemeyi açıyoruz
+                isWaitingForResponse = true;
+
+                // 2. Sesi Çal
                 String command = "TONE:" + frequency + "," + dbLevel + "\n";
                 System.out.println("<- Cihaza Giden Komut: " + command.trim());
                 activePort.writeBytes(command.getBytes(), command.getBytes().length);
 
-                // 3. Sesi 1.5 saniye boyunca çalmasını bekle
+                // 3. Sinyal 1.5 saniye çalıyor (Hasta bu sırada butona basabilir!)
                 Thread.sleep(1500); 
 
-                // 4. Arduino'nun beklediği susturma komutu: STOP\n
+                // 4. Sesi Kapat
                 String stopCommand = "STOP\n";
-                System.out.println("<- Cihaza Giden Komut: STOP");
                 activePort.writeBytes(stopCommand.getBytes(), stopCommand.getBytes().length);
                 
-                // 5. Hasta butona basacak mı? (Timeout kontrolü)
-                isWaitingForResponse = true;
-                Thread.sleep(2000); // 2 saniye cevap bekle
+                // 5. Hasta sesten sonra 2 saniye daha basabilir
+                int timeoutCounter = 0;
+                while (isWaitingForResponse && timeoutCounter < 20) {
+                    Thread.sleep(100); // 100ms'lik dilimler halinde 2 saniye bekle
+                    timeoutCounter++;
+                }
                 
-                if (isWaitingForResponse && eventListener != null) {
+                // 6. Eğer hala cevap gelmediyse (isWaitingForResponse true kaldıysa)
+                if (isWaitingForResponse) {
+                    isWaitingForResponse = false; // Dinlemeyi kapat
                     System.out.println("-> Süre doldu, hasta butona basmadı.");
-                    eventListener.onNoResponseTimeout();
+                    if (eventListener != null) {
+                        eventListener.onNoResponseTimeout();
+                    }
                 }
 
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }).start();
+    }
+    
+    public void simulatePatientResponse() {
+        if (isWaitingForResponse) {
+            System.out.println("-> [SANAL/KLAVYE] Hasta sesi duyduğunu belirtti!");
+            isWaitingForResponse = false;
+            if (eventListener != null) {
+                eventListener.onPatientResponded(); 
+            }
+        }
     }
 
     public void setListener(AudiometerListener listener) {
